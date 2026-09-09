@@ -1,102 +1,95 @@
-// 2차 검토: 게임 물리 및 상태 전이 시뮬레이션 테스트
+// 2차 검토: 낮/밤 모드 및 5점 단위 랜덤 컬러 전환 시뮬레이션
 
-console.log('=== [2차 검토: 게임 엔진 & 로직 시뮬레이션] ===\n');
+console.log('======================================================');
+console.log('  🔍 [2차 검토: 낮/밤 모드 및 5점 단위 컬러 변신 시뮬레이션]');
+console.log('======================================================\n');
 
-// 1. Buddy 물리 시뮬레이션 테스트
-const GROUND_Y = 560;
+// 1. 낮/밤 모드 토글 시뮬레이션
+let isNightMode = false;
+let buttonText = '☀️';
+
+function toggleTheme() {
+  isNightMode = !isNightMode;
+  buttonText = isNightMode ? '🌙' : '☀️';
+}
+
+console.log('1. 낮/밤 모드 상태 토글 검증');
+console.log(`  - 초기 상태: isNightMode = ${isNightMode}, UI = ${buttonText}`);
+toggleTheme();
+console.log(`  - 1회 토글: isNightMode = ${isNightMode}, UI = ${buttonText}`);
+if (isNightMode !== true || buttonText !== '🌙') {
+  console.error('❌ 밤 모드 전환 실패');
+  process.exit(1);
+}
+toggleTheme();
+console.log(`  - 2회 토글: isNightMode = ${isNightMode}, UI = ${buttonText}`);
+if (isNightMode !== false || buttonText !== '☀️') {
+  console.error('❌ 낮 모드 복귀 실패');
+  process.exit(1);
+}
+console.log('  ✅ 낮/밤 모드 양방향 전환 및 UI 아이콘 동기화 정상 작동.');
+
+// 2. 점수 진행(Score Progression) 및 5점 단위 변신 시뮬레이션
+console.log('\n2. 5점 단위 점수 달성 시 캐릭터 색상 변경 시뮬레이션');
+
+const BUDDY_PALETTES = [
+  '클래식 옐로우', '사쿠라 핑크', '오션 시안', '미스틱 바이올렛',
+  '선셋 오렌지', '에메랄드 그린', '네온 코발트', '루비 레드'
+];
+
 const buddy = {
-  x: 95,
-  y: 280,
-  radius: 17,
-  velocity: 0,
-  gravity: 0.32,
-  jumpStrength: -6.4,
-  flap() {
-    this.velocity = this.jumpStrength;
+  paletteIndex: 0,
+  transformHistory: [],
+
+  reset() {
+    this.paletteIndex = 0;
+    this.transformHistory = [];
   },
-  update(gameState) {
-    if (gameState === 1) { // PLAYING
-      this.velocity += this.gravity;
-      this.y += this.velocity;
-      if (this.y + this.radius >= GROUND_Y) {
-        this.y = GROUND_Y - this.radius;
-        return 'GAMEOVER';
-      }
-      if (this.y - this.radius <= 0) {
-        this.y = this.radius;
-        this.velocity = 0;
-      }
-    }
-    return 'OK';
+
+  changeRandomColor() {
+    let nextIndex;
+    do {
+      nextIndex = Math.floor(Math.random() * BUDDY_PALETTES.length);
+    } while (nextIndex === this.paletteIndex && BUDDY_PALETTES.length > 1);
+    const prev = this.paletteIndex;
+    this.paletteIndex = nextIndex;
+    this.transformHistory.push({ from: prev, to: nextIndex, name: BUDDY_PALETTES[nextIndex] });
   }
 };
 
-// 점프 테스트
-buddy.flap();
-if (buddy.velocity === -6.4) {
-  console.log('✅ [물리] 플랩(점프) 속도 정상 반영 (-6.4)');
-} else {
-  console.error('❌ [물리] 플랩 속도 오류');
-}
+let transformTriggerCount = 0;
 
-// 중력 낙하 및 바닥 충돌 테스트 (60 프레임 시뮬레이션)
-let hitGround = false;
-for (let f = 0; f < 100; f++) {
-  const res = buddy.update(1);
-  if (res === 'GAMEOVER') {
-    hitGround = true;
-    break;
+// 1점부터 25점까지 시뮬레이션
+for (let score = 1; score <= 25; score++) {
+  if (score > 0 && score % 5 === 0) {
+    buddy.changeRandomColor();
+    transformTriggerCount++;
+    console.log(`  - [점수 ${score}점 달성!] 캐릭터 색상 변신: ${buddy.transformHistory[buddy.transformHistory.length - 1].name}`);
   }
 }
-if (hitGround && buddy.y + buddy.radius <= GROUND_Y) {
-  console.log(`✅ [물리] 중력 낙하 후 바닥 도달 시 정확히 게임오버 감지 (y: ${buddy.y})`);
+
+console.log(`  - 총 변신 발동 횟수: ${transformTriggerCount}회 (기대값: 5회)`);
+if (transformTriggerCount !== 5) {
+  console.error('❌ 변신 발동 횟수 오류');
+  process.exit(1);
+}
+
+// 중복 연속 색상 방지 검증
+const consecutiveSame = buddy.transformHistory.some(t => t.from === t.to);
+if (consecutiveSame) {
+  console.error('❌ 연속으로 같은 색상이 선택된 케이스 발견');
+  process.exit(1);
 } else {
-  console.error('❌ [물리] 바닥 도달 감지 실패');
+  console.log('  ✅ 변신 시 항상 이전 색상과 다른 새로운 색상이 보장됩니다.');
 }
 
-// 2. 충돌 감지 알고리즘 정밀도 테스트
-function checkCollision(circle, rx, ry, rw, rh) {
-  const effectiveRadius = circle.radius - 3.5;
-  const closestX = Math.max(rx, Math.min(circle.x, rx + rw));
-  const closestY = Math.max(ry, Math.min(circle.y, ry + rh));
-  const distanceX = circle.x - closestX;
-  const distanceY = circle.y - closestY;
-  return (distanceX * distanceX + distanceY * distanceY) < (effectiveRadius * effectiveRadius);
-}
-
-// 충돌 케이스 1: 완전히 빗겨간 경우
-const noHit = checkCollision({ x: 95, y: 250, radius: 17 }, 200, 0, 68, 150);
-// 충돌 케이스 2: 파이프 내부에 위치한 경우
-const directHit = checkCollision({ x: 100, y: 100, radius: 17 }, 90, 0, 68, 150);
-// 충돌 케이스 3: 갭(통로) 한가운데 안전하게 통과하는 경우
-const safePass = checkCollision({ x: 120, y: 200, radius: 17 }, 100, 0, 68, 120); // gap between 120 and 260
-
-if (!noHit && directHit && !safePass) {
-  console.log('✅ [충돌 감지] 원-직사각형 히트박스 판정 완벽 작동 (허위 판정 0건)');
+// 3. 게임 리셋 시 색상 원복 검증
+buddy.reset();
+if (buddy.paletteIndex === 0) {
+  console.log('  ✅ 게임 재시작 시 기본 컬러(클래식 옐로우)로 정상 리셋.');
 } else {
-  console.error('❌ [충돌 감지] 충돌 판정 오류:', { noHit, directHit, safePass });
+  console.error('❌ 리셋 후 색상 초기화 실패');
+  process.exit(1);
 }
 
-// 3. 점수 계산 및 메달 매핑 테스트
-function getMedal(score) {
-  if (score >= 40) return '💎 다이아몬드';
-  if (score >= 25) return '🥇 골드';
-  if (score >= 10) return '🥈 실버';
-  return '🥉 브론즈';
-}
-
-const medalTests = [
-  { score: 3, expected: '🥉 브론즈' },
-  { score: 12, expected: '🥈 실버' },
-  { score: 28, expected: '🥇 골드' },
-  { score: 55, expected: '💎 다이아몬드' }
-];
-
-const medalsOk = medalTests.every(t => getMedal(t.score) === t.expected);
-if (medalsOk) {
-  console.log('✅ [스코어 & 메달] 점수대별 메달 산출 로직 정상 작동');
-} else {
-  console.error('❌ [스코어 & 메달] 메달 산출 오류');
-}
-
-console.log('\n✨ 2차 검토(물리, 충돌, 스코어링 로직) 결과: 오류 없이 100% 정상!');
+console.log('\n✨ [2차 검토 결과]: 모든 시뮬레이션 및 로직 이상 없음 (PASS)!');

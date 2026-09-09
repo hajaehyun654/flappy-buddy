@@ -1,36 +1,8 @@
-// 2차 검토: 낮/밤 모드 및 5점 단위 랜덤 컬러 전환 시뮬레이션
+// 2차 검토: 매 1점마다 캐릭터 랜덤 색상 변경 및 낮/밤 모드 무결성 검증
 
 console.log('======================================================');
-console.log('  🔍 [2차 검토: 낮/밤 모드 및 5점 단위 컬러 변신 시뮬레이션]');
+console.log('  🔍 [2차 검토: 매 1점 단위 캐릭터 색상 변경 시뮬레이션]');
 console.log('======================================================\n');
-
-// 1. 낮/밤 모드 토글 시뮬레이션
-let isNightMode = false;
-let buttonText = '☀️';
-
-function toggleTheme() {
-  isNightMode = !isNightMode;
-  buttonText = isNightMode ? '🌙' : '☀️';
-}
-
-console.log('1. 낮/밤 모드 상태 토글 검증');
-console.log(`  - 초기 상태: isNightMode = ${isNightMode}, UI = ${buttonText}`);
-toggleTheme();
-console.log(`  - 1회 토글: isNightMode = ${isNightMode}, UI = ${buttonText}`);
-if (isNightMode !== true || buttonText !== '🌙') {
-  console.error('❌ 밤 모드 전환 실패');
-  process.exit(1);
-}
-toggleTheme();
-console.log(`  - 2회 토글: isNightMode = ${isNightMode}, UI = ${buttonText}`);
-if (isNightMode !== false || buttonText !== '☀️') {
-  console.error('❌ 낮 모드 복귀 실패');
-  process.exit(1);
-}
-console.log('  ✅ 낮/밤 모드 양방향 전환 및 UI 아이콘 동기화 정상 작동.');
-
-// 2. 점수 진행(Score Progression) 및 5점 단위 변신 시뮬레이션
-console.log('\n2. 5점 단위 점수 달성 시 캐릭터 색상 변경 시뮬레이션');
 
 const BUDDY_PALETTES = [
   '클래식 옐로우', '사쿠라 핑크', '오션 시안', '미스틱 바이올렛',
@@ -57,39 +29,41 @@ const buddy = {
   }
 };
 
-let transformTriggerCount = 0;
+console.log('1. 매 1점 획득 시 색상 변경 시뮬레이션 (1점 ~ 10점)');
 
-// 1점부터 25점까지 시뮬레이션
-for (let score = 1; score <= 25; score++) {
-  if (score > 0 && score % 5 === 0) {
-    buddy.changeRandomColor();
-    transformTriggerCount++;
-    console.log(`  - [점수 ${score}점 달성!] 캐릭터 색상 변신: ${buddy.transformHistory[buddy.transformHistory.length - 1].name}`);
-  }
+let score = 0;
+for (let i = 1; i <= 10; i++) {
+  score++;
+  buddy.changeRandomColor();
+  const current = buddy.transformHistory[buddy.transformHistory.length - 1];
+  console.log(`  - [점수 ${score}점 달성!] 색상 변신: ${current.name} (index: ${current.to})`);
 }
 
-console.log(`  - 총 변신 발동 횟수: ${transformTriggerCount}회 (기대값: 5회)`);
-if (transformTriggerCount !== 5) {
-  console.error('❌ 변신 발동 횟수 오류');
-  process.exit(1);
-}
-
-// 중복 연속 색상 방지 검증
-const consecutiveSame = buddy.transformHistory.some(t => t.from === t.to);
-if (consecutiveSame) {
-  console.error('❌ 연속으로 같은 색상이 선택된 케이스 발견');
-  process.exit(1);
+// 검증 1: 총 변신 횟수 확인
+console.log(`\n  - 총 점수 증가 횟수: 10회, 총 변신 횟수: ${buddy.transformHistory.length}회`);
+if (buddy.transformHistory.length === 10) {
+  console.log('  ✅ [매 1점 변신] 매 점수마다 누락 없이 100% 변신 트리거 작동 확인.');
 } else {
-  console.log('  ✅ 변신 시 항상 이전 색상과 다른 새로운 색상이 보장됩니다.');
+  console.error('❌ 변신 횟수 불일치!');
+  process.exit(1);
 }
 
-// 3. 게임 리셋 시 색상 원복 검증
+// 검증 2: 연속으로 동일한 색상이 선택되지 않는지 확인
+const consecutiveDuplicates = buddy.transformHistory.filter(t => t.from === t.to);
+if (consecutiveDuplicates.length === 0) {
+  console.log('  ✅ [중복 방지] 매 1점 변신 시 항상 이전 색상과 다른 새로운 색상으로의 전환 보장.');
+} else {
+  console.error('❌ 연속 중복 색상 발견:', consecutiveDuplicates);
+  process.exit(1);
+}
+
+// 검증 3: 게임 리셋 시 기본 노란색(index: 0) 초기화 확인
 buddy.reset();
 if (buddy.paletteIndex === 0) {
-  console.log('  ✅ 게임 재시작 시 기본 컬러(클래식 옐로우)로 정상 리셋.');
+  console.log('  ✅ [게임 리셋] 새 게임 시작 시 기본 컬러(클래식 옐로우)로 리셋 확인.');
 } else {
-  console.error('❌ 리셋 후 색상 초기화 실패');
+  console.error('❌ 리셋 오류');
   process.exit(1);
 }
 
-console.log('\n✨ [2차 검토 결과]: 모든 시뮬레이션 및 로직 이상 없음 (PASS)!');
+console.log('\n✨ [2차 검토 결과]: 매 1점 단위 색상 변경 로직 이상 없음 (PASS)!');

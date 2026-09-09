@@ -65,6 +65,7 @@
     .hud-button:active {
       transform: scale(0.92);
     }
+    #theme-btn { right: 120px; }
     #pause-btn { right: 68px; }
     #sound-btn { right: 16px; }
 
@@ -168,6 +169,7 @@
 
 <div id="game-container">
   <canvas id="gameCanvas" width="420" height="640"></canvas>
+  <button id="theme-btn" class="hud-button" title="낮/밤 모드 전환 (N)">☀️</button>
   <button id="pause-btn" class="hud-button" title="일시정지 (P)">❚❚</button>
   <button id="sound-btn" class="hud-button" title="소리 On/Off (M)">🔊</button>
 
@@ -237,6 +239,7 @@ const finalScoreEl = document.getElementById('finalScore');
 const bestScoreTextEl = document.getElementById('bestScoreText');
 const medalBoxEl = document.getElementById('medalBox');
 const medalTitleEl = document.getElementById('medalTitle');
+const themeBtn = document.getElementById('theme-btn');
 const pauseBtn = document.getElementById('pause-btn');
 const soundBtn = document.getElementById('sound-btn');
 const restartBtn = document.getElementById('restartBtn');
@@ -259,6 +262,19 @@ let score = 0;
 let bestScore = parseInt(localStorage.getItem('flappy_buddy_best') || '0', 10);
 let soundEnabled = true;
 let isPaused = false;
+let isNightMode = false;
+
+// Precomputed twinkling stars for night mode
+const stars = [];
+for (let i = 0; i < 48; i++) {
+  stars.push({
+    x: Math.random() * GAME_WIDTH,
+    y: Math.random() * (GROUND_Y - 80),
+    radius: Math.random() * 1.6 + 0.6,
+    twinkleSpeed: Math.random() * 0.05 + 0.02,
+    phase: Math.random() * Math.PI * 2
+  });
+}
 
 // Audio Synthesizer (Web Audio API - 100% self-contained)
 class SoundEffects {
@@ -650,43 +666,134 @@ const pipes = {
 let groundOffset = 0;
 
 function drawBackground() {
-  const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
-  sky.addColorStop(0, '#38bdf8');
-  sky.addColorStop(0.65, '#bae6fd');
-  sky.addColorStop(1, '#e0f2fe');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, GAME_WIDTH, GROUND_Y);
+  if (isNightMode) {
+    // Night Sky Gradient
+    const nightSky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+    nightSky.addColorStop(0, '#090d16');
+    nightSky.addColorStop(0.55, '#1e1b4b');
+    nightSky.addColorStop(1, '#312e81');
+    ctx.fillStyle = nightSky;
+    ctx.fillRect(0, 0, GAME_WIDTH, GROUND_Y);
 
-  // Clouds
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-  const cloudX1 = ((frames * 0.4) % (GAME_WIDTH + 160)) - 80;
-  drawCloud(GAME_WIDTH - cloudX1, 95, 42);
-  const cloudX2 = ((frames * 0.25 + 200) % (GAME_WIDTH + 200)) - 100;
-  drawCloud(GAME_WIDTH - cloudX2, 160, 32);
+    // Twinkling Stars
+    stars.forEach(s => {
+      const alpha = 0.35 + 0.65 * Math.abs(Math.sin(frames * s.twinkleSpeed + s.phase));
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
 
-  // Distant Hills
-  ctx.fillStyle = '#86efac';
-  ctx.beginPath();
-  ctx.moveTo(0, GROUND_Y);
-  for (let x = 0; x <= GAME_WIDTH; x += 40) {
-    const hillY = GROUND_Y - 45 + Math.sin((x + frames * 0.3) * 0.02) * 14;
-    ctx.lineTo(x, hillY);
+    // Glowing Crescent Moon
+    ctx.save();
+    const moonX = 330;
+    const moonY = 85;
+    // Outer Moon Glow
+    const moonGlow = ctx.createRadialGradient(moonX, moonY, 12, moonX, moonY, 40);
+    moonGlow.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+    moonGlow.addColorStop(1, 'rgba(254, 240, 138, 0)');
+    ctx.fillStyle = moonGlow;
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, 40, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Crescent Moon Shape
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#090d16'; // Shadow cutout
+    ctx.beginPath();
+    ctx.arc(moonX - 8, moonY - 4, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Night Clouds (Soft moonlit clouds)
+    ctx.fillStyle = 'rgba(199, 210, 254, 0.22)';
+    const cloudX1 = ((frames * 0.3) % (GAME_WIDTH + 160)) - 80;
+    drawCloud(GAME_WIDTH - cloudX1, 105, 38);
+    const cloudX2 = ((frames * 0.18 + 200) % (GAME_WIDTH + 200)) - 100;
+    drawCloud(GAME_WIDTH - cloudX2, 175, 28);
+
+    // Distant Night Hills
+    ctx.fillStyle = '#1e1b4b';
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    for (let x = 0; x <= GAME_WIDTH; x += 40) {
+      const hillY = GROUND_Y - 45 + Math.sin((x + frames * 0.3) * 0.02) * 14;
+      ctx.lineTo(x, hillY);
+    }
+    ctx.lineTo(GAME_WIDTH, GROUND_Y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Foreground Night Hills
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    for (let x = 0; x <= GAME_WIDTH; x += 30) {
+      const hillY = GROUND_Y - 24 + Math.sin((x + frames * 0.6) * 0.035) * 10;
+      ctx.lineTo(x, hillY);
+    }
+    ctx.lineTo(GAME_WIDTH, GROUND_Y);
+    ctx.closePath();
+    ctx.fill();
+
+  } else {
+    // Day Sky Gradient
+    const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+    sky.addColorStop(0, '#38bdf8');
+    sky.addColorStop(0.65, '#bae6fd');
+    sky.addColorStop(1, '#e0f2fe');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, GAME_WIDTH, GROUND_Y);
+
+    // Warm Sun
+    ctx.save();
+    const sunGlow = ctx.createRadialGradient(340, 80, 10, 340, 80, 48);
+    sunGlow.addColorStop(0, 'rgba(253, 224, 71, 0.5)');
+    sunGlow.addColorStop(1, 'rgba(253, 224, 71, 0)');
+    ctx.fillStyle = sunGlow;
+    ctx.beginPath();
+    ctx.arc(340, 80, 48, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath();
+    ctx.arc(340, 80, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Day Clouds
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.82)';
+    const cloudX1 = ((frames * 0.4) % (GAME_WIDTH + 160)) - 80;
+    drawCloud(GAME_WIDTH - cloudX1, 95, 42);
+    const cloudX2 = ((frames * 0.25 + 200) % (GAME_WIDTH + 200)) - 100;
+    drawCloud(GAME_WIDTH - cloudX2, 160, 32);
+
+    // Distant Hills
+    ctx.fillStyle = '#86efac';
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    for (let x = 0; x <= GAME_WIDTH; x += 40) {
+      const hillY = GROUND_Y - 45 + Math.sin((x + frames * 0.3) * 0.02) * 14;
+      ctx.lineTo(x, hillY);
+    }
+    ctx.lineTo(GAME_WIDTH, GROUND_Y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Foreground Hills
+    ctx.fillStyle = '#4ade80';
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    for (let x = 0; x <= GAME_WIDTH; x += 30) {
+      const hillY = GROUND_Y - 24 + Math.sin((x + frames * 0.6) * 0.035) * 10;
+      ctx.lineTo(x, hillY);
+    }
+    ctx.lineTo(GAME_WIDTH, GROUND_Y);
+    ctx.closePath();
+    ctx.fill();
   }
-  ctx.lineTo(GAME_WIDTH, GROUND_Y);
-  ctx.closePath();
-  ctx.fill();
-
-  // Foreground Hills
-  ctx.fillStyle = '#4ade80';
-  ctx.beginPath();
-  ctx.moveTo(0, GROUND_Y);
-  for (let x = 0; x <= GAME_WIDTH; x += 30) {
-    const hillY = GROUND_Y - 24 + Math.sin((x + frames * 0.6) * 0.035) * 10;
-    ctx.lineTo(x, hillY);
-  }
-  ctx.lineTo(GAME_WIDTH, GROUND_Y);
-  ctx.closePath();
-  ctx.fill();
 }
 
 function drawCloud(cx, cy, r) {
@@ -703,24 +810,45 @@ function drawGround() {
     groundOffset = (groundOffset + 2.35) % 24;
   }
 
-  ctx.fillStyle = '#dcedc8';
-  ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
+  if (isNightMode) {
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
 
-  ctx.fillStyle = '#8d6e63';
-  ctx.fillRect(0, GROUND_Y + 16, GAME_WIDTH, GAME_HEIGHT - GROUND_Y - 16);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, GROUND_Y + 16, GAME_WIDTH, GAME_HEIGHT - GROUND_Y - 16);
 
-  ctx.fillStyle = '#7cb342';
-  ctx.fillRect(0, GROUND_Y, GAME_WIDTH, 16);
+    ctx.fillStyle = '#1e3a5f';
+    ctx.fillRect(0, GROUND_Y, GAME_WIDTH, 16);
 
-  ctx.fillStyle = '#558b2f';
-  ctx.beginPath();
-  for (let x = -24; x < GAME_WIDTH + 24; x += 16) {
-    const px = x - groundOffset;
-    ctx.moveTo(px, GROUND_Y + 16);
-    ctx.lineTo(px + 8, GROUND_Y + 4);
-    ctx.lineTo(px + 16, GROUND_Y + 16);
+    ctx.fillStyle = '#0f2942';
+    ctx.beginPath();
+    for (let x = -24; x < GAME_WIDTH + 24; x += 16) {
+      const px = x - groundOffset;
+      ctx.moveTo(px, GROUND_Y + 16);
+      ctx.lineTo(px + 8, GROUND_Y + 4);
+      ctx.lineTo(px + 16, GROUND_Y + 16);
+    }
+    ctx.fill();
+  } else {
+    ctx.fillStyle = '#dcedc8';
+    ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
+
+    ctx.fillStyle = '#8d6e63';
+    ctx.fillRect(0, GROUND_Y + 16, GAME_WIDTH, GAME_HEIGHT - GROUND_Y - 16);
+
+    ctx.fillStyle = '#7cb342';
+    ctx.fillRect(0, GROUND_Y, GAME_WIDTH, 16);
+
+    ctx.fillStyle = '#558b2f';
+    ctx.beginPath();
+    for (let x = -24; x < GAME_WIDTH + 24; x += 16) {
+      const px = x - groundOffset;
+      ctx.moveTo(px, GROUND_Y + 16);
+      ctx.lineTo(px + 8, GROUND_Y + 4);
+      ctx.lineTo(px + 16, GROUND_Y + 16);
+    }
+    ctx.fill();
   }
-  ctx.fill();
 }
 
 function drawScoreHUD() {
@@ -809,6 +937,8 @@ window.addEventListener('keydown', (e) => {
     togglePause();
   } else if (e.key === 'm' || e.key === 'M') {
     toggleSound();
+  } else if (e.key === 'n' || e.key === 'N') {
+    toggleTheme();
   }
 });
 
@@ -826,6 +956,13 @@ restartBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   restartGame();
 });
+
+function toggleTheme() {
+  isNightMode = !isNightMode;
+  sfx.init();
+  sfx.playClick();
+  themeBtn.innerText = isNightMode ? '🌙' : '☀️';
+}
 
 function togglePause() {
   if (gameState !== STATE.PLAYING && !isPaused) return;
@@ -846,6 +983,11 @@ function toggleSound() {
   sfx.playClick();
   soundBtn.innerText = soundEnabled ? '🔊' : '🔇';
 }
+
+themeBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleTheme();
+});
 
 pauseBtn.addEventListener('click', (e) => {
   e.stopPropagation();

@@ -529,7 +529,7 @@ const buddy = {
 
     const pal = BUDDY_PALETTES[this.paletteIndex];
     // Sparkle fireworks effect on transform
-    particles.spawn(this.x, this.y, 20, pal.particle);
+    particles.spawn(this.x, this.y, 14, pal.particle);
     sfx.playTransform();
   },
 
@@ -688,12 +688,10 @@ const pipes = {
         p.passed = true;
         score++;
         sfx.playScore();
-        particles.spawn(buddy.x + 10, buddy.y, 10, '#facc15');
+        particles.spawn(buddy.x + 10, buddy.y, 8, '#facc15');
 
-        // 5점, 10점 등 점수가 5씩 바뀔 때마다 랜덤 색상으로 변신
-        if (score > 0 && score % 5 === 0) {
-          buddy.changeRandomColor();
-        }
+        // 1점이 바뀔 때마다 캐릭터 색상이 새로운 랜덤 색으로 즉시 변경
+        buddy.changeRandomColor();
       }
 
       if (this.checkCollision(buddy, p.x, 0, this.width, p.top)) {

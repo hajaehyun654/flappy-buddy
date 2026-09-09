@@ -314,15 +314,249 @@ function drawGround() {
   ctx.fill();
 }
 
+// Audio Synthesizer (Zero external assets needed!)
+class SoundEffects {
+  constructor() {
+    this.ctx = null;
+  }
+
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+      }
+    }
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
+
+  playJump() {
+    if (!soundEnabled || !this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      const now = this.ctx.currentTime;
+      osc.frequency.setValueAtTime(380, now);
+      osc.frequency.exponentialRampToValueAtTime(760, now + 0.12);
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.12);
+    } catch(e) {}
+  }
+
+  playScore() {
+    if (!soundEnabled || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      [1046.5, 1318.5].forEach((freq, i) => { // C6, E6
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + i * 0.08);
+        gain.gain.setValueAtTime(0.3, now + i * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.22);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + i * 0.08);
+        osc.stop(now + i * 0.08 + 0.22);
+      });
+    } catch(e) {}
+  }
+
+  playHit() {
+    if (!soundEnabled || !this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      const now = this.ctx.currentTime;
+      osc.frequency.setValueAtTime(240, now);
+      osc.frequency.exponentialRampToValueAtTime(45, now + 0.25);
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } catch(e) {}
+  }
+
+  playClick() {
+    if (!soundEnabled || !this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      const now = this.ctx.currentTime;
+      osc.frequency.setValueAtTime(600, now);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.05);
+    } catch(e) {}
+  }
+}
+
+const sfx = new SoundEffects();
+
+// Pipes Obstacle Manager
+const pipes = {
+  items: [],
+  width: 66,
+  gap: 138,
+  speed: 2.4,
+  spawnInterval: 105,
+
+  reset() {
+    this.items = [];
+  },
+
+  update() {
+    if (gameState !== STATE.PLAYING) return;
+
+    // Spawn pipes
+    if (frames % this.spawnInterval === 0) {
+      const minPipeHeight = 60;
+      const maxPipeHeight = GROUND_Y - this.gap - minPipeHeight;
+      const topHeight = Math.floor(Math.random() * (maxPipeHeight - minPipeHeight + 1)) + minPipeHeight;
+      this.items.push({
+        x: GAME_WIDTH,
+        top: topHeight,
+        bottom: GROUND_Y - (topHeight + this.gap),
+        passed: false
+      });
+    }
+
+    // Move & collide
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const p = this.items[i];
+      p.x -= this.speed;
+
+      // Score check
+      if (!p.passed && p.x + this.width < buddy.x) {
+        p.passed = true;
+        score++;
+        sfx.playScore();
+      }
+
+      // Precise collision with top pipe
+      if (this.checkCollision(buddy, p.x, 0, this.width, p.top)) {
+        triggerGameOver();
+        return;
+      }
+
+      // Collision with bottom pipe
+      const bottomY = GROUND_Y - p.bottom;
+      if (this.checkCollision(buddy, p.x, bottomY, this.width, p.bottom)) {
+        triggerGameOver();
+        return;
+      }
+
+      // Remove off-screen pipes
+      if (p.x + this.width < -10) {
+        this.items.splice(i, 1);
+      }
+    }
+  },
+
+  checkCollision(circle, rx, ry, rw, rh) {
+    // Slightly smaller hitbox for forgiving & fun gameplay
+    const effectiveRadius = circle.radius - 3;
+    const closestX = Math.max(rx, Math.min(circle.x, rx + rw));
+    const closestY = Math.max(ry, Math.min(circle.y, ry + rh));
+    const distanceX = circle.x - closestX;
+    const distanceY = circle.y - closestY;
+    return (distanceX * distanceX + distanceY * distanceY) < (effectiveRadius * effectiveRadius);
+  },
+
+  draw() {
+    this.items.forEach(p => {
+      // Top Pipe
+      this.drawPipeSegment(p.x, 0, this.width, p.top, true);
+
+      // Bottom Pipe
+      const bottomY = GROUND_Y - p.bottom;
+      this.drawPipeSegment(p.x, bottomY, this.width, p.bottom, false);
+    });
+  },
+
+  drawPipeSegment(x, y, w, h, isTop) {
+    // Main pipe body gradient
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, '#388e3c');
+    grad.addColorStop(0.2, '#66bb6a');
+    grad.addColorStop(0.45, '#a5d6a7');
+    grad.addColorStop(0.7, '#43a047');
+    grad.addColorStop(1, '#1b5e20');
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#1b5e20';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(x, y, w, h);
+
+    // Pipe Cap (Rim)
+    const capHeight = 24;
+    const capExtra = 6;
+    const capX = x - capExtra / 2;
+    const capW = w + capExtra;
+    const capY = isTop ? y + h - capHeight : y;
+
+    const capGrad = ctx.createLinearGradient(capX, 0, capX + capW, 0);
+    capGrad.addColorStop(0, '#2e7d32');
+    capGrad.addColorStop(0.2, '#81c784');
+    capGrad.addColorStop(0.45, '#c8e6c9');
+    capGrad.addColorStop(0.75, '#388e3c');
+    capGrad.addColorStop(1, '#1b5e20');
+
+    ctx.fillStyle = capGrad;
+    ctx.fillRect(capX, capY, capW, capHeight);
+    ctx.strokeStyle = '#1b5e20';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(capX, capY, capW, capHeight);
+
+    // Inner lip shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    if (isTop) {
+      ctx.fillRect(capX, capY + capHeight - 4, capW, 4);
+    } else {
+      ctx.fillRect(capX, capY, capW, 4);
+    }
+  }
+};
+
+let score = 0;
+let bestScore = parseInt(localStorage.getItem('flappy_buddy_best') || '0', 10);
+
+function triggerGameOver() {
+  if (gameState === STATE.GAMEOVER) return;
+  gameState = STATE.GAMEOVER;
+  sfx.playHit();
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('flappy_buddy_best', bestScore);
+  }
+}
+
 // Basic Loop
 function gameLoop() {
   if (!isPaused) {
     frames++;
     buddy.update();
+    pipes.update();
   }
 
   ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
   drawBackground();
+  pipes.draw();
   buddy.draw();
   drawGround();
 

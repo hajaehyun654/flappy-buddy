@@ -365,9 +365,96 @@ class SoundEffects {
       osc.stop(now + 0.05);
     } catch(e) {}
   }
+
+  playTransform() {
+    if (!soundEnabled || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + i * 0.06);
+        gain.gain.setValueAtTime(0.26, now + i * 0.06);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + i * 0.06);
+        osc.stop(now + i * 0.06 + 0.25);
+      });
+    } catch(e) {}
+  }
 }
 
 const sfx = new SoundEffects();
+
+// Buddy Color Palettes (Score progression rewards)
+const BUDDY_PALETTES = [
+  {
+    name: '클래식 옐로우',
+    body: ['#FFF9C4', '#FBC02D', '#F57F17'],
+    stroke: '#BF360C',
+    wing: '#FFF59D',
+    wingStroke: '#F57F17',
+    particle: '#FBC02D'
+  },
+  {
+    name: '사쿠라 핑크',
+    body: ['#FCE4EC', '#F06292', '#C2185B'],
+    stroke: '#880E4F',
+    wing: '#F8BBD0',
+    wingStroke: '#AD1457',
+    particle: '#F06292'
+  },
+  {
+    name: '오션 시안',
+    body: ['#E0F7FA', '#26C6DA', '#0097A7'],
+    stroke: '#006064',
+    wing: '#B2EBF2',
+    wingStroke: '#00838F',
+    particle: '#26C6DA'
+  },
+  {
+    name: '미스틱 바이올렛',
+    body: ['#EDE7F6', '#AB47BC', '#6A1B9A'],
+    stroke: '#4A148C',
+    wing: '#D1C4E9',
+    wingStroke: '#7B1FA2',
+    particle: '#AB47BC'
+  },
+  {
+    name: '선셋 오렌지',
+    body: ['#FFF3E0', '#FF7043', '#E64A19'],
+    stroke: '#BF360C',
+    wing: '#FFE0B2',
+    wingStroke: '#D84315',
+    particle: '#FF7043'
+  },
+  {
+    name: '에메랄드 그린',
+    body: ['#F1F8E9', '#7CB342', '#33691E'],
+    stroke: '#1B5E20',
+    wing: '#DCEDC8',
+    wingStroke: '#558B2F',
+    particle: '#7CB342'
+  },
+  {
+    name: '네온 코발트',
+    body: ['#E3F2FD', '#42A5F5', '#1565C0'],
+    stroke: '#0D47A1',
+    wing: '#BBDEFB',
+    wingStroke: '#1976D2',
+    particle: '#42A5F5'
+  },
+  {
+    name: '루비 레드',
+    body: ['#FFEBEE', '#EF5350', '#C62828'],
+    stroke: '#7F0000',
+    wing: '#FFCDD2',
+    wingStroke: '#B71C1C',
+    particle: '#EF5350'
+  }
+];
 
 // Particle System
 const particles = {
@@ -422,6 +509,7 @@ const buddy = {
   jumpStrength: -6.4,
   rotation: 0,
   wingAngle: 0,
+  paletteIndex: 0,
 
   reset() {
     this.x = 95;
@@ -429,13 +517,28 @@ const buddy = {
     this.velocity = 0;
     this.rotation = 0;
     this.wingAngle = 0;
+    this.paletteIndex = 0;
+  },
+
+  changeRandomColor() {
+    let nextIndex;
+    do {
+      nextIndex = Math.floor(Math.random() * BUDDY_PALETTES.length);
+    } while (nextIndex === this.paletteIndex && BUDDY_PALETTES.length > 1);
+    this.paletteIndex = nextIndex;
+
+    const pal = BUDDY_PALETTES[this.paletteIndex];
+    // Sparkle fireworks effect on transform
+    particles.spawn(this.x, this.y, 20, pal.particle);
+    sfx.playTransform();
   },
 
   flap() {
     sfx.init();
     this.velocity = this.jumpStrength;
     sfx.playJump();
-    particles.spawn(this.x - 12, this.y + 10, 4, '#fff9c4');
+    const pal = BUDDY_PALETTES[this.paletteIndex] || BUDDY_PALETTES[0];
+    particles.spawn(this.x - 12, this.y + 10, 4, pal.body[0]);
   },
 
   update() {
@@ -470,6 +573,8 @@ const buddy = {
   },
 
   draw() {
+    const pal = BUDDY_PALETTES[this.paletteIndex] || BUDDY_PALETTES[0];
+
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rotation);
@@ -480,17 +585,17 @@ const buddy = {
     ctx.ellipse(2, this.radius + 6, this.radius * 0.8, 4, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Body Gradient
+    // Body Gradient using active palette
     const bodyGrad = ctx.createRadialGradient(-4, -4, 4, 0, 0, this.radius);
-    bodyGrad.addColorStop(0, '#FFF9C4');
-    bodyGrad.addColorStop(0.55, '#FBC02D');
-    bodyGrad.addColorStop(1, '#F57F17');
+    bodyGrad.addColorStop(0, pal.body[0]);
+    bodyGrad.addColorStop(0.55, pal.body[1]);
+    bodyGrad.addColorStop(1, pal.body[2]);
     ctx.fillStyle = bodyGrad;
     ctx.beginPath();
     ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.lineWidth = 2.4;
-    ctx.strokeStyle = '#BF360C';
+    ctx.strokeStyle = pal.stroke;
     ctx.stroke();
 
     // Cheerful blush
@@ -527,16 +632,16 @@ const buddy = {
     ctx.lineTo(12, 7.5);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = '#BF360C';
+    ctx.strokeStyle = pal.stroke;
     ctx.lineWidth = 1.6;
     ctx.stroke();
 
-    // Wing
+    // Wing using active palette
     ctx.save();
     ctx.translate(-8, 3);
     ctx.rotate(this.wingAngle);
-    ctx.fillStyle = '#FFF59D';
-    ctx.strokeStyle = '#F57F17';
+    ctx.fillStyle = pal.wing;
+    ctx.strokeStyle = pal.wingStroke;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.ellipse(0, 0, 10, 6.5, -0.25, 0, Math.PI * 2);
@@ -584,6 +689,11 @@ const pipes = {
         score++;
         sfx.playScore();
         particles.spawn(buddy.x + 10, buddy.y, 10, '#facc15');
+
+        // 5점, 10점 등 점수가 5씩 바뀔 때마다 랜덤 색상으로 변신
+        if (score > 0 && score % 5 === 0) {
+          buddy.changeRandomColor();
+        }
       }
 
       if (this.checkCollision(buddy, p.x, 0, this.width, p.top)) {

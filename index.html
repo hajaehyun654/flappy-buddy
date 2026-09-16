@@ -416,6 +416,26 @@ class SoundEffects {
       });
     } catch(e) {}
   }
+
+  playLifeUp() {
+    if (!soundEnabled || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      // 상쾌하고 경쾌한 생명 회복 아르페지오 사운드
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + i * 0.07);
+        gain.gain.setValueAtTime(0.25, now + i * 0.07);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.28);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + i * 0.07);
+        osc.stop(now + i * 0.07 + 0.28);
+      });
+    } catch(e) {}
+  }
 }
 
 const sfx = new SoundEffects();
@@ -725,17 +745,25 @@ const pipes = {
   maxGap: 176, // 넓은 간격 (여유로운 통과)
   speed: 2.35,
   spawnInterval: 110,
+  spawnCount: 0,
 
   reset() {
     this.items = [];
+    this.spawnCount = 0;
   },
 
   update() {
     if (gameState !== STATE.PLAYING) return;
 
     if (frames % this.spawnInterval === 0) {
+      this.spawnCount++;
       // 파이프 사이 간격을 일정하게 고정하지 않고 넓거나 좁게 다양하게 생성 (난이도 및 재미 향상)
-      const currentGap = Math.floor(Math.random() * (this.maxGap - this.minGap + 1)) + this.minGap;
+      let currentGap = Math.floor(Math.random() * (this.maxGap - this.minGap + 1)) + this.minGap;
+      const hasHeart = (this.spawnCount % 5 === 0);
+      // 하트가 생성되는 5의 배수 파이프는 획득 및 통과가 원활하도록 최소 135px 이상 간격 확보
+      if (hasHeart && currentGap < 135) {
+        currentGap = 135;
+      }
       const minPipeHeight = 55;
       const maxPipeHeight = GROUND_Y - currentGap - minPipeHeight;
       const topHeight = Math.floor(Math.random() * (maxPipeHeight - minPipeHeight + 1)) + minPipeHeight;
@@ -744,13 +772,33 @@ const pipes = {
         top: topHeight,
         bottom: GROUND_Y - (topHeight + currentGap),
         gap: currentGap,
-        passed: false
+        passed: false,
+        hasHeart: hasHeart,
+        heartY: topHeight + currentGap / 2
       });
     }
 
     for (let i = this.items.length - 1; i >= 0; i--) {
       const p = this.items[i];
       p.x -= this.speed;
+
+      // 5의 배수 파이프 사이 여분의 목숨(빨간색 하트) 획득 판정
+      if (p.hasHeart) {
+        const heartX = p.x + this.width / 2;
+        const bobbingY = p.heartY + Math.sin((frames + p.x) * 0.08) * 6;
+        const dist = Math.hypot(buddy.x - heartX, buddy.y - bobbingY);
+        if (dist < buddy.radius + 15) {
+          p.hasHeart = false;
+          // 여분의 목숨은 최대 목숨 3개를 넘어가지 않음 (2개라면 1개 추가되어 3개 유지)
+          if (lives < MAX_LIVES) {
+            lives = Math.min(MAX_LIVES, lives + 1);
+            updateLivesHUD();
+          }
+          sfx.playLifeUp();
+          particles.spawn(heartX, bobbingY, 15, '#ef4444');
+          particles.spawn(heartX, bobbingY, 8, '#fda4af');
+        }
+      }
 
       if (!p.passed && p.x + this.width < buddy.x) {
         p.passed = true;
@@ -795,7 +843,54 @@ const pipes = {
       this.drawPipeSegment(p.x, 0, this.width, p.top, true);
       const bottomY = GROUND_Y - p.bottom;
       this.drawPipeSegment(p.x, bottomY, this.width, p.bottom, false);
+
+      // 5의 배수 파이프 사이 여분의 목숨(빨간색 하트) 렌더링
+      if (p.hasHeart) {
+        const heartX = p.x + this.width / 2;
+        const bobbingY = p.heartY + Math.sin((frames + p.x) * 0.08) * 6;
+        this.drawHeart(heartX, bobbingY);
+      }
     });
+  },
+
+  drawHeart(x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+
+    // 하트 두근거림 펄스 애니메이션
+    const pulse = 1 + Math.sin(frames * 0.12) * 0.14;
+    ctx.scale(pulse, pulse);
+
+    // 붉은 하트 발광 효과
+    ctx.shadowColor = 'rgba(239, 68, 68, 0.85)';
+    ctx.shadowBlur = 14;
+
+    // 빨간색 하트 패스
+    ctx.beginPath();
+    const d = 13;
+    ctx.moveTo(0, d * 0.35);
+    ctx.bezierCurveTo(-d * 0.85, -d * 0.55, -d * 1.15, d * 0.35, 0, d * 1.15);
+    ctx.bezierCurveTo(d * 1.15, d * 0.35, d * 0.85, -d * 0.55, 0, d * 0.35);
+    ctx.closePath();
+
+    const heartGrad = ctx.createLinearGradient(-d, -d, d, d);
+    heartGrad.addColorStop(0, '#ff4b72');
+    heartGrad.addColorStop(0.5, '#ef4444');
+    heartGrad.addColorStop(1, '#b91c1c');
+    ctx.fillStyle = heartGrad;
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // 반짝이는 하이라이트
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.beginPath();
+    ctx.ellipse(-d * 0.3, -d * 0.05, d * 0.28, d * 0.12, -Math.PI / 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
   },
 
   drawPipeSegment(x, y, w, h, isTop) {

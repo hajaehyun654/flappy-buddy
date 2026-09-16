@@ -69,6 +69,32 @@
     #pause-btn { right: 68px; }
     #sound-btn { right: 16px; }
 
+    .lives-container {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(6px);
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1.5px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+      z-index: 20;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .heart {
+      transition: transform 0.2s, opacity 0.2s, filter 0.2s;
+      filter: drop-shadow(0 2px 4px rgba(225, 29, 72, 0.4));
+    }
+    .heart.lost {
+      filter: grayscale(1) opacity(0.35);
+      transform: scale(0.85);
+    }
+
     /* UI Overlay Over Canvas */
     .overlay {
       position: absolute;
@@ -169,6 +195,7 @@
 
 <div id="game-container">
   <canvas id="gameCanvas" width="420" height="640"></canvas>
+  <div id="lives-display" class="lives-container" title="남은 생명"></div>
   <button id="theme-btn" class="hud-button" title="낮/밤 모드 전환 (N)">☀️</button>
   <button id="pause-btn" class="hud-button" title="일시정지 (P)">❚❚</button>
   <button id="sound-btn" class="hud-button" title="소리 On/Off (M)">🔊</button>
@@ -245,6 +272,7 @@ const soundBtn = document.getElementById('sound-btn');
 const restartBtn = document.getElementById('restartBtn');
 const resumeBtn = document.getElementById('resumeBtn');
 const downloadBtn = document.getElementById('downloadBtn');
+const livesDisplay = document.getElementById('lives-display');
 
 const GAME_WIDTH = 420;
 const GAME_HEIGHT = 640;
@@ -255,6 +283,10 @@ const STATE = {
   PLAYING: 1,
   GAMEOVER: 2
 };
+
+const MAX_LIVES = 3;
+let lives = MAX_LIVES;
+let invincibleFrames = 0;
 
 let gameState = STATE.READY;
 let frames = 0;
@@ -562,13 +594,24 @@ const buddy = {
     // Ground hit
     if (this.y + this.radius >= GROUND_Y) {
       this.y = GROUND_Y - this.radius;
-      triggerGameOver();
+      if (invincibleFrames === 0) {
+        handleBuddyHit();
+        if (lives > 0) {
+          this.velocity = this.jumpStrength * 0.85;
+        }
+      } else {
+        this.velocity = 0;
+      }
     }
 
     // Ceiling clamp
     if (this.y - this.radius <= 0) {
       this.y = this.radius;
       this.velocity = 0;
+    }
+
+    if (invincibleFrames > 0) {
+      invincibleFrames--;
     }
   },
 
@@ -577,6 +620,26 @@ const buddy = {
 
     ctx.save();
     ctx.translate(this.x, this.y);
+
+    // 무적 모드: 반투명 깜빡임 및 무지개 보호막 오라 효과
+    if (invincibleFrames > 0) {
+      if (Math.floor(frames / 5) % 2 === 0) {
+        ctx.globalAlpha = 0.28;
+      } else {
+        ctx.globalAlpha = 0.92;
+      }
+
+      const shieldHue = (frames * 8) % 360;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius + 7, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsl(${shieldHue}, 100%, 65%)`;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 4]);
+      ctx.lineDashOffset = -frames * 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     ctx.rotate(this.rotation);
 
     // Dynamic shadow
@@ -699,15 +762,17 @@ const pipes = {
         buddy.changeRandomColor();
       }
 
-      if (this.checkCollision(buddy, p.x, 0, this.width, p.top)) {
-        triggerGameOver();
-        return;
-      }
-
-      const bottomY = GROUND_Y - p.bottom;
-      if (this.checkCollision(buddy, p.x, bottomY, this.width, p.bottom)) {
-        triggerGameOver();
-        return;
+      // 무적 모드가 아닐 때만 충돌 검사 실행 (무적 시 장애물 안전 통과)
+      if (invincibleFrames === 0) {
+        if (this.checkCollision(buddy, p.x, 0, this.width, p.top)) {
+          handleBuddyHit();
+        } else {
+          const bottomY = GROUND_Y - p.bottom;
+          if (this.checkCollision(buddy, p.x, bottomY, this.width, p.bottom)) {
+            handleBuddyHit();
+          }
+        }
+        if (lives <= 0) return;
       }
 
       if (p.x + this.width < -12) {
@@ -779,7 +844,66 @@ const pipes = {
 let groundOffset = 0;
 
 function drawBackground() {
-  if (isNightMode) {
+  if (invincibleFrames > 0) {
+    // 무적 모드: 화려하고 역동적인 무지개 배경 렌더링
+    const rainbowSky = ctx.createLinearGradient(0, 0, GAME_WIDTH, GROUND_Y);
+    const hueBase = (frames * 4.5) % 360;
+    rainbowSky.addColorStop(0, `hsl(${hueBase % 360}, 90%, 65%)`);
+    rainbowSky.addColorStop(0.2, `hsl(${(hueBase + 60) % 360}, 90%, 65%)`);
+    rainbowSky.addColorStop(0.4, `hsl(${(hueBase + 120) % 360}, 90%, 65%)`);
+    rainbowSky.addColorStop(0.6, `hsl(${(hueBase + 180) % 360}, 90%, 65%)`);
+    rainbowSky.addColorStop(0.8, `hsl(${(hueBase + 240) % 360}, 90%, 65%)`);
+    rainbowSky.addColorStop(1, `hsl(${(hueBase + 300) % 360}, 90%, 65%)`);
+    ctx.fillStyle = rainbowSky;
+    ctx.fillRect(0, 0, GAME_WIDTH, GROUND_Y);
+
+    // 반짝이는 무지개 별빛
+    stars.forEach(s => {
+      const alpha = 0.4 + 0.6 * Math.abs(Math.sin(frames * s.twinkleSpeed * 1.5 + s.phase));
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.radius * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // 무지개 구름
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
+    const cloudX1 = ((frames * 0.55) % (GAME_WIDTH + 160)) - 80;
+    drawCloud(GAME_WIDTH - cloudX1, 95, 42);
+    const cloudX2 = ((frames * 0.35 + 200) % (GAME_WIDTH + 200)) - 100;
+    drawCloud(GAME_WIDTH - cloudX2, 160, 32);
+
+    // 무지개 언덕 (원경)
+    const hillGrad1 = ctx.createLinearGradient(0, GROUND_Y - 50, 0, GROUND_Y);
+    hillGrad1.addColorStop(0, `hsl(${(hueBase + 130) % 360}, 75%, 70%)`);
+    hillGrad1.addColorStop(1, `hsl(${(hueBase + 190) % 360}, 75%, 55%)`);
+    ctx.fillStyle = hillGrad1;
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    for (let x = 0; x <= GAME_WIDTH; x += 40) {
+      const hillY = GROUND_Y - 45 + Math.sin((x + frames * 0.4) * 0.02) * 14;
+      ctx.lineTo(x, hillY);
+    }
+    ctx.lineTo(GAME_WIDTH, GROUND_Y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 무지개 언덕 (근경)
+    const hillGrad2 = ctx.createLinearGradient(0, GROUND_Y - 30, 0, GROUND_Y);
+    hillGrad2.addColorStop(0, `hsl(${(hueBase + 250) % 360}, 80%, 65%)`);
+    hillGrad2.addColorStop(1, `hsl(${(hueBase + 310) % 360}, 80%, 50%)`);
+    ctx.fillStyle = hillGrad2;
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    for (let x = 0; x <= GAME_WIDTH; x += 30) {
+      const hillY = GROUND_Y - 24 + Math.sin((x + frames * 0.7) * 0.035) * 10;
+      ctx.lineTo(x, hillY);
+    }
+    ctx.lineTo(GAME_WIDTH, GROUND_Y);
+    ctx.closePath();
+    ctx.fill();
+
+  } else if (isNightMode) {
     // Night Sky Gradient
     const nightSky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
     nightSky.addColorStop(0, '#090d16');
@@ -977,9 +1101,39 @@ function drawScoreHUD() {
   ctx.restore();
 }
 
+function updateLivesHUD() {
+  let heartsHtml = '';
+  for (let i = 0; i < MAX_LIVES; i++) {
+    if (i < lives) {
+      heartsHtml += '<span class="heart">❤️</span>';
+    } else {
+      heartsHtml += '<span class="heart lost">🤍</span>';
+    }
+  }
+  livesDisplay.innerHTML = heartsHtml;
+}
+
+function handleBuddyHit() {
+  if (invincibleFrames > 0) return;
+  lives--;
+  updateLivesHUD();
+  sfx.playHit();
+  particles.spawn(buddy.x, buddy.y, 18, '#ef4444');
+
+  if (lives <= 0) {
+    triggerGameOver();
+  } else {
+    // 피격 시 잠시 무적 모드 (깜빡임, 무지개 배경, 장애물 통과)
+    invincibleFrames = 150; // 약 2.5초 지속
+  }
+}
+
 function triggerGameOver() {
   if (gameState === STATE.GAMEOVER) return;
   gameState = STATE.GAMEOVER;
+  invincibleFrames = 0;
+  lives = 0;
+  updateLivesHUD();
   sfx.playHit();
   particles.spawn(buddy.x, buddy.y, 20, '#ef4444');
 
@@ -1012,6 +1166,9 @@ function triggerGameOver() {
 
 function restartGame() {
   sfx.playClick();
+  lives = MAX_LIVES;
+  invincibleFrames = 0;
+  updateLivesHUD();
   buddy.reset();
   pipes.reset();
   particles.items = [];
@@ -1154,6 +1311,7 @@ function gameLoop() {
 }
 
 // Start
+updateLivesHUD();
 requestAnimationFrame(gameLoop);
 </script>
 

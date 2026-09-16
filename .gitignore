@@ -13,3 +13,6 @@ $RECYCLE.BIN/
 
 # Logs
 *.log
+
+# Cloudflare Wrangler
+.wrangler/

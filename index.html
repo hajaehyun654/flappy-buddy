@@ -658,6 +658,8 @@ const pipes = {
   items: [],
   width: 68,
   gap: 140,
+  minGap: 112, // 좁은 간격 (높은 난이도 & 스릴)
+  maxGap: 176, // 넓은 간격 (여유로운 통과)
   speed: 2.35,
   spawnInterval: 110,
 
@@ -669,13 +671,16 @@ const pipes = {
     if (gameState !== STATE.PLAYING) return;
 
     if (frames % this.spawnInterval === 0) {
-      const minPipeHeight = 65;
-      const maxPipeHeight = GROUND_Y - this.gap - minPipeHeight;
+      // 파이프 사이 간격을 일정하게 고정하지 않고 넓거나 좁게 다양하게 생성 (난이도 및 재미 향상)
+      const currentGap = Math.floor(Math.random() * (this.maxGap - this.minGap + 1)) + this.minGap;
+      const minPipeHeight = 55;
+      const maxPipeHeight = GROUND_Y - currentGap - minPipeHeight;
       const topHeight = Math.floor(Math.random() * (maxPipeHeight - minPipeHeight + 1)) + minPipeHeight;
       this.items.push({
         x: GAME_WIDTH,
         top: topHeight,
-        bottom: GROUND_Y - (topHeight + this.gap),
+        bottom: GROUND_Y - (topHeight + currentGap),
+        gap: currentGap,
         passed: false
       });
     }

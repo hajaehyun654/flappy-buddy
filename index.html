@@ -808,6 +808,12 @@ const pipes = {
 
         // 1점이 바뀔 때마다 캐릭터 색상이 새로운 랜덤 색으로 즉시 변경
         buddy.changeRandomColor();
+
+        // [버그] 4개의 파이프를 지나가면 게임이 그냥 종료됨
+        if (score >= 4) {
+          triggerGameOver();
+          return;
+        }
       }
 
       // 무적 모드가 아닐 때만 충돌 검사 실행 (무적 시 장애물 안전 통과)

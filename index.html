@@ -109,6 +109,13 @@
       pointer-events: none;
       z-index: 15;
     }
+    #pauseOverlay {
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      pointer-events: auto;
+      transition: background 0.2s ease;
+    }
     .card {
       background: rgba(255, 255, 255, 0.96);
       color: #0f172a;
@@ -1371,6 +1378,12 @@ pauseBtn.addEventListener('click', (e) => {
 resumeBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   togglePause();
+});
+
+pauseOverlay.addEventListener('click', (e) => {
+  if (e.target === pauseOverlay) {
+    togglePause();
+  }
 });
 
 soundBtn.addEventListener('click', (e) => {
